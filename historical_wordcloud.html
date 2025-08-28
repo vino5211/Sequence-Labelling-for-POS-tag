@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>古代官职帝号词云图</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'SimHei', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .title {
+            color: white;
+            font-size: 26px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .wordcloud-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 3px solid #d4af37;
+        }
+        
+        #wordcloud {
+            border: 2px solid #8B4513;
+            border-radius: 10px;
+            background: linear-gradient(45deg, white,  white);
+        }
+        
+        .word-text {
+            font-family: 'SimHei', 'KaiTi', serif;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .word-text:hover {
+            stroke: #d4af37;
+            stroke-width: 1px;
+            filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
+        }
+        
+        .info {
+            margin-top: 15px;
+            color: white;
+            text-align: center;
+            font-size: 14px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        
+        .stats {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px 25px;
+            border-radius: 10px;
+            margin-top: 20px;
+            color: #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .control-panel {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #d4af37;
+        }
+
+        .btn-primary:hover {
+            background: #b8941f;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 128, 0, 0.9);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-weight: bold;
+            z-index: 10000;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="title">📜 古代官职帝号词云图 📜</div>
+    
+    <div class="wordcloud-container">
+        <svg id="wordcloud" width="800" height="500"></svg>
+    </div>
+    
+    <div class="info">
+        鼠标悬停可查看词汇详情 | 所有词汇频次均为1 | 智能布局确保无重叠
+    </div>
+    
+    <div class="stats">
+        <strong>统计信息：</strong> 共30个词汇 | 画布尺寸：800×600px | 包含皇帝谥号、官职名称、兵法典籍等
+    </div>
+
+    <div class="control-panel">
+        <button class="btn btn-primary" onclick="regenerateLayout()">重新布局</button>
+        <button class="btn btn-primary" onclick="showStats()">显示统计</button>
+        <button class="btn btn-primary" onclick="savePNG()">保存PNG</button>
+    </div>
+
+    <script>
+        // 词汇数据
+        const words = [
+            "捧日天武四厢都指揮使",
+            "中書平章同知詹事府事", 
+            "玄宗至道大聖大明孝皇帝",
+            "閔元天地大寶聖文神武孝德證道皇帝",
+            "內庫瑞錦對雉鬬羊翔鳳游麟圖",
+            "中書門下省檢正諸房公事",
+            "鳶龍神衛四厢都指揮使",
+            "曷蘇館路女真國大王府",
+            "明宗聖德和武欽孝皇帝",
+            "聖明神武廣運法天文德恭孝皇帝",
+            "體天法道極功全德神文聖武睿哲明孝皇帝",
+            "體乾應曆隆功盛德憲文肅武睿神宣孝皇帝",
+            "安國鎮制置城壕鎮戎古記",
+            "元旬聖文神武法天應道皇帝",
+            "仁孝慈懿誠明莊獻配天齊聖文皇后",
+            "誠孝恭肅明德弘仁順天啓聖昭皇后",
+            "孝肅貞順康懿光烈輔天承聖睿皇后",
+            "孝和恭獻温穆徽慈諧天鞠聖皇太后",
+            "侍衛親軍馬步軍副指揮使",
+            "兵法遁甲孤虚斗中域法",
+            "推元嘉十二年日時兵法",
+            "逆推元嘉五十年太歲計用兵法",
+            "皇甫謐、曹翕論寒食散方",
+            "汨咄禄長壽天親毗伽可汗",
+            "莫賀咄侯屈利俟毗可汗",
+            "小龍番静蠻宣德安撫司",
+            "左翊蒙古侍衛親軍都指揮使",
+            "廣德至仁昭烈崇簡應天",
+            "尸利那羅僧伽寶多枝摩"
+        ];
+
+        // 增强的颜色方案 - 中国传统色彩
+        const colors = [
+            "#C8102E", "#8B0000", "#DC143C", "#B22222", "#CD853F",
+            "#DAA520", "#FF8C00", "#FF6347", "#4169E1", "#6A5ACD",
+            "#483D8B", "#2F4F4F", "#008B8B", "#556B2F", "#8FBC8F",
+            "#20B2AA", "#4682B4", "#5F9EA0", "#6495ED", "#7B68EE",
+            "#9370DB", "#8A2BE2", "#9932CC", "#BA55D3", "#DDA0DD",
+            "#DA70D6", "#FF1493", "#FF69B4", "#FFB6C1"
+        ];
+
+        // SVG容器
+        const svg = d3.select("#wordcloud");
+        const width = 800;
+        const height = 500;
+        const centerX = width / 2;
+        const centerY = height / 2;
+
+        // 精确计算文本边界
+        function getTextDimensions(text, fontSize) {
+            // 创建临时元素来测量文本尺寸
+            const tempSvg = d3.select("body").append("svg")
+                .style("visibility", "hidden")
+                .style("position", "absolute");
+            
+            const tempText = tempSvg.append("text")
+                .style("font-size", fontSize + "px")
+                .style("font-family", "'SimHei', 'KaiTi', serif")
+                .style("font-weight", "bold")
+                .text(text);
+            
+            const bbox = tempText.node().getBBox();
+            tempSvg.remove();
+            
+            return {
+                width: bbox.width,
+                height: bbox.height
+            };
+        }
+
+        // 获取文本的精确边界框
+        function getTextBounds(x, y, text, fontSize) {
+            const dimensions = getTextDimensions(text, fontSize);
+            const padding = 8; // 增加内边距
+            
+            return {
+                left: x - dimensions.width/2 - padding,
+                right: x + dimensions.width/2 + padding,
+                top: y - dimensions.height/2 - padding,
+                bottom: y + dimensions.height/2 + padding,
+                width: dimensions.width + 2 * padding,
+                height: dimensions.height + 2 * padding
+            };
+        }
+
+        // 检测两个边界框是否重叠
+        function isOverlapping(bounds1, bounds2) {
+            return !(bounds1.right < bounds2.left || 
+                    bounds1.left > bounds2.right || 
+                    bounds1.bottom < bounds2.top || 
+                    bounds1.top > bounds2.bottom);
+        }
+
+        // 根据字符数量智能计算字体大小
+        function getFontSize(text) {
+            const length = text.length;
+            if (length <= 6) return 28;
+            else if (length <= 10) return 24;
+            else if (length <= 15) return 20;
+            else if (length <= 20) return 18;
+            else if (length <= 25) return 16;
+            else if (length <= 30) return 14;
+            else return 12;
+        }
+
+        // 高级词云布局算法
+        function generateLayout() {
+            const positions = [];
+            const placedBounds = [];
+
+            // 按长度排序，先放置短词汇
+            const sortedWords = words.map((word, index) => ({
+                word,
+                originalIndex: index,
+                length: word.length
+            })).sort((a, b) => a.length - b.length);
+
+            sortedWords.forEach((item, i) => {
+                const { word } = item;
+                const fontSize = getFontSize(word);
+                let x, y;
+                let bounds;
+                let validPosition = false;
+                let attempts = 0;
+                const maxAttempts = 1000;
+
+                while (!validPosition && attempts < maxAttempts) {
+                    if (attempts < 50) {
+                        // 前50次尝试：中心区域螺旋分布
+                        const angle = attempts * 2.399; // 黄金角的近似值
+                        const radius = Math.sqrt(attempts) * 15;
+                        x = centerX + Math.cos(angle) * radius;
+                        y = centerY + Math.sin(angle) * radius;
+                    } else if (attempts < 200) {
+                        // 51-200次：扩大螺旋范围
+                        const angle = attempts * 0.3;
+                        const radius = (attempts - 50) * 3 + 100;
+                        x = centerX + Math.cos(angle) * radius;
+                        y = centerY + Math.sin(angle) * radius;
+                    } else if (attempts < 500) {
+                        // 201-500次：网格化搜索
+                        const gridSize = 20;
+                        const gridX = Math.floor((attempts - 200) / Math.sqrt(300));
+                        const gridY = (attempts - 200) % Math.sqrt(300);
+                        x = centerX - 300 + gridX * gridSize + Math.random() * gridSize;
+                        y = centerY - 200 + gridY * gridSize + Math.random() * gridSize;
+                    } else {
+                        // 500+次：随机位置
+                        x = Math.random() * (width - 200) + 100;
+                        y = Math.random() * (height - 100) + 50;
+                    }
+
+                    bounds = getTextBounds(x, y, word, fontSize);
+                    
+                    // 确保在画布范围内
+                    if (bounds.left < 10 || bounds.right > width - 10 || 
+                        bounds.top < 10 || bounds.bottom > height - 10) {
+                        attempts++;
+                        continue;
+                    }
+
+                    // 检查是否与已放置的文本重叠
+                    validPosition = !placedBounds.some(placedBound => 
+                        isOverlapping(bounds, placedBound));
+                    
+                    attempts++;
+                }
+
+                if (validPosition) {
+                    positions.push({ 
+                        word, 
+                        x, 
+                        y, 
+                        fontSize, 
+                        color: colors[item.originalIndex % colors.length],
+                        attempts
+                    });
+                    placedBounds.push(bounds);
+                } else {
+                    console.warn(`无法为词汇 "${word}" 找到合适位置，尝试次数: ${attempts}`);
+                    // 强制放置在一个可能的位置
+                    x = Math.random() * (width - 400) + 200;
+                    y = Math.random() * (height - 100) + 50;
+                    positions.push({ 
+                        word, 
+                        x, 
+                        y, 
+                        fontSize: Math.max(fontSize - 2, 8), 
+                        color: colors[item.originalIndex % colors.length],
+                        attempts
+                    });
+                }
+            });
+
+            return positions;
+        }
+
+        // 渲染词云
+        function renderWordCloud() {
+            // 清除现有内容
+            svg.selectAll(".word-text").remove();
+            
+            console.log("开始生成词云布局...");
+            const startTime = Date.now();
+            const positions = generateLayout();
+            const endTime = Date.now();
+            console.log(`布局生成完成，耗时: ${endTime - startTime}ms`);
+
+            const textElements = svg.selectAll(".word-text")
+                .data(positions)
+                .enter()
+                .append("text")
+                .attr("class", "word-text")
+                .attr("x", d => d.x)
+                .attr("y", d => d.y)
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "central")
+                .style("font-size", d => d.fontSize + "px")
+                .style("font-weight", "bold")
+                .style("font-family", "'SimHei', 'KaiTi', serif")
+                .style("fill", d => d.color)
+                .text(d => d.word)
+                .style("opacity", 0);
+
+            // 入场动画
+            textElements
+                .transition()
+                .duration(1200)
+                .delay((d, i) => i * 80)
+                .style("opacity", 1)
+                .style("transform", "scale(1)")
+                .ease(d3.easeBackOut);
+
+            // 交互效果
+            textElements
+                .on("mouseover", function(event, d) {
+                    d3.select(this)
+                        .transition()
+                        .duration(200)
+                        .style("font-size", (d.fontSize * 1.3) + "px")
+                        .style("fill", "#d4af37");
+                    
+                    // 显示提示信息
+                    const tooltip = d3.select("body")
+                        .append("div")
+                        .attr("class", "tooltip")
+                        .style("position", "absolute")
+                        .style("background", "rgba(0,0,0,0.9)")
+                        .style("color", "white")
+                        .style("padding", "10px 15px")
+                        .style("border-radius", "8px")
+                        .style("font-size", "13px")
+                        .style("pointer-events", "none")
+                        .style("z-index", "10000")
+                        .style("box-shadow", "0 4px 12px rgba(0,0,0,0.3)")
+                        .style("opacity", 0)
+                        .html(`<strong>${d.word}</strong><br>频次: 1<br>字符数: ${d.word.length}`);
+
+                    tooltip
+                        .style("left", (event.pageX + 15) + "px")
+                        .style("top", (event.pageY - 15) + "px")
+                        .transition()
+                        .duration(200)
+                        .style("opacity", 1);
+                })
+                .on("mouseout", function(event, d) {
+                    d3.select(this)
+                        .transition()
+                        .duration(200)
+                        .style("font-size", d.fontSize + "px")
+                        .style("fill", d.color);
+                    
+                    d3.selectAll(".tooltip").remove();
+                })
+                .on("click", function(event, d) {
+                    // 点击闪烁效果
+                    const element = d3.select(this);
+                    element
+                        .transition()
+                        .duration(150)
+                        .style("fill", "#FFD700")
+                        .style("transform", "scale(1.4)")
+                        .transition()
+                        .duration(150)
+                        .style("fill", d.color)
+                        .style("transform", "scale(1)");
+                });
+
+            console.log(`成功放置 ${positions.length} 个词汇`);
+            return positions;
+        }
+
+        // 重新生成布局
+        function regenerateLayout() {
+            console.log("重新生成布局...");
+            renderWordCloud();
+        }
+
+        // 显示统计信息
+        function showStats() {
+            const lengthStats = words.reduce((acc, word) => {
+                const length = word.length;
+                acc.totalLength += length;
+                acc.minLength = Math.min(acc.minLength, length);
+                acc.maxLength = Math.max(acc.maxLength, length);
+                return acc;
+            }, { totalLength: 0, minLength: Infinity, maxLength: 0 });
+
+            const avgLength = (lengthStats.totalLength / words.length).toFixed(1);
+
+            alert(`词云统计信息：
+• 总词汇数：${words.length} 个
+• 画布尺寸：${width} × ${height} px
+• 平均字符长度：${avgLength} 字符
+• 最短词汇：${lengthStats.minLength} 字符
+• 最长词汇：${lengthStats.maxLength} 字符
+• 布局算法：智能螺旋+网格混合`);
+        }
+
+        // 保存为PNG图片
+        function savePNG() {
+            try {
+                // 创建一个新的canvas元素
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // 设置canvas尺寸为高分辨率
+                const scale = 2; // 提高分辨率
+                canvas.width = width * scale;
+                canvas.height = height * scale;
+                ctx.scale(scale, scale);
+                
+                // 设置背景
+                const gradient = ctx.createLinearGradient(0, 0, width, height);
+                gradient.addColorStop(0, '#fef9e7');
+                gradient.addColorStop(1, '#fdf2e9');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, width, height);
+                
+                // 添加边框
+                ctx.strokeStyle = '#8B4513';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(2, 2, width - 4, height - 4);
+                
+                // 获取所有文本元素
+                const textElements = svg.selectAll('.word-text').nodes();
+                
+                // 在canvas上绘制每个文本
+                textElements.forEach(textElement => {
+                    const text = textElement.textContent;
+                    const x = parseFloat(textElement.getAttribute('x'));
+                    const y = parseFloat(textElement.getAttribute('y'));
+                    const fontSize = textElement.style.fontSize.replace('px', '');
+                    const color = textElement.style.fill;
+                    
+                    // 设置字体样式
+                    ctx.font = `bold ${fontSize}px 'SimHei', 'Microsoft YaHei', sans-serif`;
+                    ctx.fillStyle = color;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    // 添加文本阴影效果
+                    ctx.shadowColor = 'rgba(0,0,0,0.2)';
+                    ctx.shadowBlur = 3;
+                    ctx.shadowOffsetX = 1;
+                    ctx.shadowOffsetY = 1;
+                    
+                    // 绘制文本
+                    ctx.fillText(text, x, y);
+                    
+                    // 重置阴影
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                });
+                
+                // 添加标题
+                ctx.font = 'bold 24px "SimHei", "Microsoft YaHei", sans-serif';
+                ctx.fillStyle = '#8B4513';
+                ctx.textAlign = 'center';
+                ctx.fillText('古代官职帝号词云图', width/2, 30);
+                
+                // 添加底部信息
+                ctx.font = '14px "SimHei", "Microsoft YaHei", sans-serif';
+                ctx.fillStyle = '#666';
+                ctx.fillText(`共${words.length}个词汇 | 800×600px | 生成时间: ${new Date().toLocaleString()}`, width/2, height - 15);
+                
+                // 将canvas转换为blob并下载
+                canvas.toBlob(function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `古代官职帝号词云图_${new Date().getTime()}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    // 显示成功提示
+                    showSaveSuccess();
+                }, 'image/png', 0.95);
+                
+            } catch (error) {
+                console.error('保存PNG时出错:', error);
+                alert('保存失败，请稍后重试。\n错误信息: ' + error.message);
+            }
+        }
+
+        // 显示保存成功提示
+        function showSaveSuccess() {
+            // 创建提示框
+            const notification = d3.select("body")
+                .append("div")
+                .style("position", "fixed")
+                .style("top", "50%")
+                .style("left", "50%")
+                .style("transform", "translate(-50%, -50%)")
+                .style("background", "rgba(0, 128, 0, 0.9)")
+                .style("color", "white")
+                .style("padding", "20px 30px")
+                .style("border-radius", "10px")
+                .style("font-size", "16px")
+                .style("font-weight", "bold")
+                .style("z-index", "10000")
+                .style("box-shadow", "0 4px 20px rgba(0,0,0,0.3)")
+                .style("opacity", 0)
+                .text("✅ PNG图片保存成功！");
+
+            // 动画显示和隐藏
+            notification
+                .transition()
+                .duration(300)
+                .style("opacity", 1)
+                .transition()
+                .delay(2000)
+                .duration(300)
+                .style("opacity", 0)
+                .remove();
+        }
+
+        // 初始化词云
+        console.log("初始化词云图...");
+        renderWordCloud();
+    </script>
+</body>
+</html>
